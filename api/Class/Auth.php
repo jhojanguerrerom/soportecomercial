@@ -113,10 +113,11 @@ class Auth
 
             $data = (object)$dataclick;
 
-            if ($data->state) {
-                $response = ['state' => true, 'msg' => $data->msg];
+            // Solución aplicada usando operadores ?? para evitar Undefined property en PHP 8+
+            if ($data->state ?? false) {
+                $response = ['state' => true, 'msg' => $data->msg ?? null];
             } else {
-                $response = ['state' => false, 'msg' => $data->msg];
+                $response = ['state' => false, 'msg' => $data->msg ?? null];
             }
 
             //var_dump($response);die();
@@ -174,7 +175,8 @@ class Auth
 
                 $data = (object)$dataclick;
 
-                if ($data->state) {
+                // Solución aplicada usando operadores ?? para prevenir warnings similares en recoverPass
+                if ($data->state ?? false) {
                     $stmt1 = $this->_DB->SeguimientoPedidos()->prepare("UPDATE usuario
                                                     SET cambio_login = 'SI',
                                                     fecha_cambio_login = NOW() 

@@ -105,4 +105,29 @@
             }
 
         }
+
+        function toaActividades(){
+
+            try {
+                $tipo_de_base = 'pgsql';
+                $host = 'localhost';
+                $port = 5932;
+                $nombre_de_base = 'rpa_gescom_toa';
+                $usuario = 'rpa_reports_salesforce';
+                $contrasena = 'PZwqpGS0-9M725V42-3ET1xAwE-SHJ7aPCw';
+    
+                try {
+                    $conn = new PDO("$tipo_de_base:host=$host;port=$port;dbname=$nombre_de_base",$usuario,$contrasena);
+                    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                } catch (PDOException $e) {
+                    echo ("No se logró conectar correctamente con la base de datos: $nombre_de_base, error: $e");
+                }
+    
+                return $conn;
+            } catch (\Exception $e) {
+                die($e->getMessage());
+            }
+
+        }
+
     }

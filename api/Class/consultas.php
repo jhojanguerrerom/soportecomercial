@@ -606,4 +606,73 @@ class consultas
         echo json_encode($dataclick);
     }
 
+    public function actuacionToa($data)
+    {
+        try {
+            // Validamos el parámetro de forma segura por si llega como string o arreglo
+            $numeroActuacion = is_array($data) ? ($data['actuacion'] ?? $data['data'] ?? '') : $data;
+
+            $stmt = $this->_DB->toaActividades()->prepare("
+                SELECT c.*,
+                    CASE
+                       WHEN estado_de_la_orden = 'en ruta' THEN estado_de_la_orden
+                       WHEN estado_de_la_orden = 'Iniciado' THEN estado_de_la_orden
+                       WHEN estado_de_la_orden = 'Completado' THEN estado_de_la_orden
+                       WHEN estado_de_la_orden = 'Cancelado' THEN estado_de_la_orden
+                       WHEN estado_de_la_orden = 'No Realizada' THEN estado_de_la_orden
+                       WHEN estado_de_la_orden = 'Pendiente'  THEN estado_de_la_orden
+                       WHEN estado_de_la_orden = 'Suspendido' THEN estado_de_la_orden
+                       ELSE estado_de_la_orden 
+                    END AS ESTADO_MOSTRAR,
+                    CASE 
+                        WHEN estado_de_la_orden = 'en ruta' THEN 'Tu orden con pedido ' || COALESCE(numero_de_actuacion, '') || ' tiene fecha de instalacion ' || COALESCE(TO_CHAR(fecha_de_cita, 'DD/MM/YYYY'), 'Sin fecha') || ' en horario ' || COALESCE(franja_horaria, '') || ', ya cuenta con un tecnico asignado y se dirige a la direccion, recuerda contarle al usuario que debe permanecer un mayor de edad y contar con los equipos disponibles para la instalacion.'
+                        WHEN estado_de_la_orden = 'Iniciado' THEN 'Nuestro personal tecnico ya se encuentra en el domicilio realizando la instalacion, el tecnico que se encuentra prestando el servicio es: ' || COALESCE(tecnico, '') || ' con identificacion: ' || COALESCE(id_recurso, '')
+                        WHEN estado_de_la_orden = 'Completado' THEN 'El servicio ya fue instalado a satisfaccion'
+                        WHEN estado_de_la_orden = 'Cancelado' THEN 'Tu orden con pedido ' || COALESCE(numero_de_actuacion, '') || ' se cancelo por el siguiente motivo: ' || COALESCE(motivo_cancelacion, 'Sin especificar')
+                        WHEN estado_de_la_orden = 'Cancelado' AND commit <> '1' THEN 'Tu orden con pedido ' || COALESCE(numero_de_actuacion, '') || ' todavia no ha tomado vias'
+                        WHEN estado_de_la_orden = 'Suspendido' THEN 'Lastimosamente no fue posible realizar el 100% de la instalacion del pedido ' || COALESCE(numero_de_actuacion, '') || ' el cual quedo en concepto ' || COALESCE(codigo_suspendida_instalacion_masivo_, 'Sin especificar')
+                        WHEN estado_de_la_orden = 'No Realizada' THEN 'La orden no se pudo realizar por novedad en campo.'
+                        WHEN estado_de_la_orden = 'Pendiente' AND fecha_de_cita is null THEN 'Tu orden con pedido ' || COALESCE(numero_de_actuacion, '') || ' no se encuentra agendada por favor validar con el grupo de agendamiento'
+                        WHEN estado_de_la_orden = 'Pendiente' AND fecha_dia = fecha_de_cita THEN 'Tu orden con pedido ' || COALESCE(numero_de_actuacion, '') || ' tiene fecha de instalacion ' || COALESCE(TO_CHAR(fecha_de_cita, 'DD/MM/YYYY'), 'Sin fecha') || ' en horario ' || COALESCE(franja_horaria, '') || ', ya cuenta con un tecnico asignado y se dirige a la direccion, recuerda contarle al usuario que debe permanecer un mayor de edad y contar con los equipos disponibles para la instalacion.'
+                        WHEN estado_de_la_orden = 'Pendiente' AND fecha_dia <> fecha_de_cita THEN 'Tu orden con pedido ' || COALESCE(numero_de_actuacion, '') || ' no se encuentra en ruta para el dia de hoy, su fecha de instalacion es el ' || COALESCE(TO_CHAR(fecha_de_cita, 'DD/MM/YYYY'), 'Sin fecha') || ' en horario ' || COALESCE(franja_horaria, '')
+                        ELSE 'la orden no esta agendada para hoy, validar con el grupo de agendamiento'
+                    END AS OBSERVACION
+                FROM (  
+                    SELECT a.tecnico, a.id_recurso, a.tipo_de_actividad, a.subtipo_de_orden, a.numero_de_pedido_atis, a.codigo_suspendida_instalacion_masivo_,
+                           a.numero_de_actuacion, a.estado_de_la_orden, a.departamento, a.localidad, a.enrutar, a.motivo_cancelacion,
+                           a.commit, a.franja_horaria, CURRENT_DATE AS fecha_dia, NULLIF(a.fecha_de_cita, '')::date AS fecha_de_cita,
+                           COALESCE(NULLIF(TRIM(s.prop_text), ''), 'Sin supervisor') AS nombre_supervisor,
+                           ROW_NUMBER() OVER(PARTITION BY a.numero_de_actuacion ORDER BY a.id_de_actividad DESC) AS conteo
+                    FROM rpa_toa_actividades a
+                    LEFT JOIN tecnicos t ON CAST(SPLIT_PART(t.provider_id::text, '.', 1) AS TEXT) = CAST(SPLIT_PART(a.id_recurso::text, '.', 1) AS TEXT)
+                    LEFT JOIN supervisores s ON CAST(SPLIT_PART(t.xr_field_supervisor::text, '.', 1) AS TEXT) = CAST(SPLIT_PART(s.prop_index::text, '.', 1) AS TEXT)
+                    WHERE a.tipo_de_actividad IN ('ALTA','POSVENTA','AVERIA')
+                ) c
+                WHERE conteo = 1 AND numero_de_actuacion = :numero_de_actuacion
+            ");
+
+            $stmt->execute(array(':numero_de_actuacion' => $numeroActuacion));
+            $resultado = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Limpiamos cualquier salida previa para garantizar un JSON puro en Angular
+            if (ob_get_length()) ob_clean();
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                "success" => true,
+                "data" => $resultado
+            ]);
+
+            $this->_BD = null;
+
+        } catch (PDOException $e) {
+            if (ob_get_length()) ob_clean();
+            header('Content-Type: application/json');
+            echo json_encode([
+                "success" => false,
+                "error" => $e->getMessage()
+            ]);
+        }
+    }
+
 }

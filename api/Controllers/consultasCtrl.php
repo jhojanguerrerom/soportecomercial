@@ -29,6 +29,12 @@ if (isset($data['method'])) {
             $user = new consultas();
             $user->Supervisor($data['data']);
             break;
+        // NUEVO CASO PARA LA CONSULTA EN TOA
+        case 'ActuacionToa':
+            require_once '../Class/consultas.php';
+            $user = new consultas();
+            $user->actuacionToa($data['data']);
+            break;
         default:
             echo 'ninguna opción valida.';
             break;
